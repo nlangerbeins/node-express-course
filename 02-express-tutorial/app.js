@@ -1,63 +1,48 @@
 const express = require('express');
 const app = express();
-const { products } = require('./data');
+const cookieParser = require('cookie-parser');
 
-app.use(express.static('./public'));
+const peopleRouter = require('./routes/people');
 
-app.get('/api/v1/products', (req, res) => {
-  res.status(200).json(products);
+// static assets
+app.use(express.static('./methods-public'));
+
+// Middleware to parse url-encoded and JSON request bodies
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// router
+app.use('/api/v1/people', peopleRouter);
+
+// cookie parser
+app.use(cookieParser());
+
+const auth = (req, res, next) => {
+  const { name } = req.cookies;
+
+  if (!name) {
+    res.status(401).send('unauthorized');
+  }
+  req.user = name;
+  next();
+};
+
+app.post('/logon', (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  res.cookie('name', name);
+  res.status(200).send(`Hello ${name}`);
 });
 
-app.get('/api/v1/products/:productID', (req, res) => {
-  const { productID } = req.params;
-  const singleProduct = products.find((product) => {
-    return product.id === Number(productID);
-  });
-
-  if (!singleProduct) {
-    return res.status(404).send('That product was not found');
-  }
-  return res.json(singleProduct);
+app.delete('/logoff', (req, res) => {
+  res.clearCookie('name');
+  res.status(200).json({ msg: 'The user is logged off' });
 });
 
-app.get('/api/v1/query', (req, res) => {
-  console.log(req.query);
-
-  const { search, limit, price } = req.query;
-  let sortedProducts = [...products];
-
-  // Filter by search term
-  //   if (search) {
-  //     sortedProducts = sortedProducts.filter((product) =>
-  //       product.name.startsWith(search)
-  //     );
-  //   }
-
-  // Apply limit
-  if (limit) {
-    sortedProducts = sortedProducts.slice(0, parseInt(limit));
-  }
-
-  // Filter by maximum price
-  if (price) {
-    sortedProducts = sortedProducts.filter((product) => {
-      return product.price < parseFloat(price);
-    });
-  }
-
-  // Filter by regular expression
-  if (search) {
-    const regex = new RegExp(search, 'i');
-    sortedProducts = sortedProducts.filter((product) =>
-      regex.test(product.name)
-    );
-  }
-
-  res.status(200).json(sortedProducts);
-});
-
-app.all('*', (req, res) => {
-  res.status(404).send('<h4>Page not found</h4>');
+app.get('/test', auth, (req, res) => {
+  res.status(200).json({ msg: `Welcome ${req.user}` });
 });
 
 app.listen(3000);
